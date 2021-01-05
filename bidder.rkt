@@ -71,7 +71,8 @@ version
       ((Acorns) "Acorns/Clubs")
       ((Leaves) "Leaves/Spades")
       ((Hearts) "Hearts")
-      ((Bells)  "Bells/Diamonds"))))
+      ((Bells)  "Bells/Diamonds")
+      ((Grand)  "Grand"))))
 
 (define (card-rank-name card)
   (let ((rank (card-rank card)))
@@ -156,9 +157,11 @@ version
 
 (define (count-matadors)
   (define hand
-    (take (sort-cards cards) (if (eq? trump 'Grand) 4 10)))
+    (parameterize ((reversed? #f))
+      (take (sort-cards cards) (if (eq? trump 'Grand) 4 10))))
   (define trumps
-    (take (sort-cards deck) (if (eq? trump 'Grand) 4 10)))
+    (parameterize ((reversed? #f))
+      (take (sort-cards deck) (if (eq? trump 'Grand) 4 10))))
   (if (member (card 'Unter 'Acorns) hand)
       (let with ((hand hand) (matadors trumps) (count 0))
         (cond
@@ -179,6 +182,7 @@ version
           ;; No trump in hand yet, keep counting
           (else (without (cdr matadors) (add1 count)))))))
 
+;;; TODO: Cleanup
 (define (calculate-value)
   (define-syntax-rule (++ str x)
     (begin (set! x (add1 x)) (string-append str (number->string x))))
@@ -212,15 +216,24 @@ version
 (define (calculate-null-value)
   (define hand? (send hand-box get-value))
   (define ouvert? (send ouvert-box get-value))
+  (define lost? (send lost-box get-value))
   ;; Fixed values
-  (cond ((and hand? ouvert?)
-         (format "Null ouvert hand: ~a" 59))
-        (ouvert?
-         (format "Null ouvert: ~a" 46))
-        (hand?
-         (format "Null hand: ~a" 35))
-        (else
-         (format "Null: ~a" 23))))
+  (define contract
+    (list-ref
+     '((" ouvert hand" . 59)
+       (" ouvert" . 46)
+       (" hand" . 35)
+       ("" . 23))
+     (cond ((and hand? ouvert?) 0)
+           (ouvert? 1)
+           (hand? 2)
+           (else 3))))
+  (let ((name (car contract))
+        (score (cdr contract)))
+    (~a
+     "Null" name
+     " " score
+     (if lost? (format ", lost ~a" (* score -2)) ""))))
 
 ;;; Drawing logic
 ;; Card dimensions
