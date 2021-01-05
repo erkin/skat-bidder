@@ -57,22 +57,30 @@ version
       ((Unter) (if French? "J" "U"))
       (else (number->string rank)))))
 
-(define (card-symbol card)
-  (case (card-suit card)
+(define (suit-symbol suit)
+  (case suit
     ((Acorns) "\u2663")
     ((Leaves) "\u2660")
     ((Hearts) "\u2665")
     ((Bells)  "\u2666")))
 
+;; For calculation
+(define (suit-value suit)
+  (case suit
+    ((Acorns) 12)
+    ((Leaves) 11)
+    ((Hearts) 10)
+    ((Bells)   9)
+    ((Grand)  24)))
+
 ;; For selection
-(define (card-suit-name card)
-  (let ((suit (card-suit card)))
-    (case suit
-      ((Acorns) "Acorns/Clubs")
-      ((Leaves) "Leaves/Spades")
-      ((Hearts) "Hearts")
-      ((Bells)  "Bells/Diamonds")
-      ((Grand)  "Grand"))))
+(define (suit-name suit)
+  (case suit
+    ((Acorns) "Acorns/Clubs")
+    ((Leaves) "Leaves/Spades")
+    ((Hearts) "Hearts")
+    ((Bells)  "Bells/Diamonds")
+    ((Grand)  "Grand")))
 
 (define (card-rank-name card)
   (let ((rank (card-rank card)))
@@ -83,10 +91,6 @@ version
           ((King) "King")
           ((Ober) "Ober/Queen")
           ((Unter) "Unter/Jack")))))
-
-;; For calculation
-(define (suit-value suit)
-  (cdr (assq suit '((Grand . 24) (Acorns . 12) (Leaves . 11) (Hearts . 10) (Bells . 9)))))
 
 ;;; Sorting logic
 (define (get-ranks)
@@ -197,7 +201,7 @@ version
          (matadors (count-matadors))
          (point (abs matadors)))
     (~a
-     (card-suit-name (card 'Deuce trump)) " " base-value
+     (suit-name trump) " " base-value
      (if (negative? matadors) " without " " with ")
      point
      (++ ", game " point)
@@ -266,7 +270,7 @@ version
       (send dc draw-text (card-letter card)
             (+ 5 step card-x-margin) (+ 2 card-y-margin))
       ;; Card symbol
-      (send dc draw-text (card-symbol card)
+      (send dc draw-text (suit-symbol (card-suit card))
             (+ 3 step card-x-margin) (+ 20 card-y-margin)))))
 
 ;;;; Windowing logic
@@ -493,7 +497,7 @@ version
 (for ((suit (in-list (get-suits))))
   (define panel
     (new group-box-panel% (parent card-selection)
-         (label (card-suit-name (card 'Deuce suit)))
+         (label (suit-name suit))
          (alignment '(left center))
          (stretchable-width #f) (stretchable-height #f)))
   (for ((rank (in-list (get-ranks))))
