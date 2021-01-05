@@ -2,7 +2,7 @@
 
 ;;;; Program info
 (define program-name "Skat bid calculator")
-(define program-version "v0.1")
+(define program-version "v0.2")
 
 (define version-message
   (format #<<version
@@ -192,26 +192,22 @@ version
   (let* ((base-value (suit-value trump))
          (matadors (count-matadors))
          (point (abs matadors)))
-    (with-output-to-string
-      (thunk
-       (for-each
-        display
-        (list
-         trump " " base-value
-         (if (negative? matadors) " without " " with ")
-         point
-         (++ ", game " point)
-         (if hand? (++ ", hand " point) "")
-         (if schneider-result? (++ ", schneider " point) "")
-         (if schneider? (++ ", schneider declared " point) "")
-         (if schwarz-result? (++ ", schwarz " point) "")
-         (if schwarz? (++ ", schwarz declared " point) "")
-         (if ouvert? (++ ", ouvert " point) "")
-         (cond (lost? (set! point (* -2 point))
-                      (string-append ", lost " (number->string point)))
-               (else ""))
-         ": "
-         (* point base-value)))))))
+    (~a
+     (card-suit-name (card 'Deuce trump)) " " base-value
+     (if (negative? matadors) " without " " with ")
+     point
+     (++ ", game " point)
+     (if hand? (++ ", hand " point) "")
+     (if schneider-result? (++ ", schneider " point) "")
+     (if schneider? (++ ", schneider declared " point) "")
+     (if schwarz-result? (++ ", schwarz " point) "")
+     (if schwarz? (++ ", schwarz declared " point) "")
+     (if ouvert? (++ ", ouvert " point) "")
+     (cond (lost? (set! point (* -2 point))
+                  (string-append ", lost " (number->string point)))
+           (else ""))
+     ": "
+     (* point base-value))))
 
 (define (calculate-null-value)
   (define hand? (send hand-box get-value))
@@ -228,7 +224,7 @@ version
 
 ;;; Drawing logic
 ;; Card dimensions
-(define card-x-margin 100)
+(define card-x-margin 120)
 (define card-y-margin 20)
 (define card-x-size 60)
 (define card-y-size 100)
@@ -266,7 +262,7 @@ version
        (label (string-append program-name " " program-version))
        (style '(no-resize-border))
        (width 680)  (min-width 680)
-       (height 450) (min-height 450)
+       (height 500) (min-height 500)
        (stretchable-width #f) (stretchable-height #f)))
 
 ;;; Contains aesthetic options
@@ -467,7 +463,7 @@ version
 
 (define reversed-box
   (new check-box% (parent top-panel)
-       (label "Reversed order")
+       (label "Reverse order")
        (callback
         (λ (tickbox event)
           (when (eq? 'check-box (send event get-event-type))
