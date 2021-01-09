@@ -129,18 +129,18 @@ version
   ;; but not in a null game.
   (define (unter? card)
     (eq? 'Unter (card-rank card)))
-  (cond
-    ((and (unter? a) (not Null?))
-     (if (unter? b)
-         (default-suit>? a b)
-         #t))
-    ((and (unter? b) (not Null?)) #f)
-    ((same-suit? a b) (rank>? a b))
-    ((suit>? a b) #t)
-    (else #f)))
+  (cond ((and (unter? a) (not Null?))
+         (if (unter? b)
+             (default-suit>? a b)
+             #t))
+        ((and (unter? b) (not Null?)) #f)
+        ((same-suit? a b) (rank>? a b))
+        ((suit>? a b) #t)
+        (else #f)))
 
 (define (sort-cards cards)
   ;; Some people prefer it in reverse order
+  ;; reversed? is a parameter so that we can dynamically alter it externally.
   (if (reversed?)
       (sort cards (negate card>?))
       (sort cards card>?)))
@@ -160,68 +160,77 @@ version
     (card rank suit)))
 
 (define (count-matadors)
+  ;; Take only the top four cards if grand is declared, otherwise take them all.
   (define hand
     (parameterize ((reversed? #f))
       (take (sort-cards cards) (if (eq? trump 'Grand) 4 10))))
+  ;; Likewise. In the case of grand, trumps contains the unters only.
+  ;; Otherwise it contains the top ten trumps: 4 unters and 6 of selected suit, descending.
   (define trumps
     (parameterize ((reversed? #f))
       (take (sort-cards deck) (if (eq? trump 'Grand) 4 10))))
+  ;; Playing 'with' or 'without' is determined by the unter of acorns.
   (if (member (card 'Unter 'Acorns) hand)
       (let with ((hand hand) (matadors trumps) (count 0))
         (cond
-          ;; Only kicks in if the whole hand is made up of unters and trumps
+          ;; Only kicks in if the whole hand is made up of unters and trumps.
           ((null? hand) count)
-          ;; Card matches, keep counting
+          ;; Card matches, keep counting.
           ((equal? (car hand) (car matadors))
            (with (cdr hand) (cdr matadors) (add1 count)))
-          ;; Missing a card, hit the brake
+          ;; Missing a card, hit the brake.
           (else count)))
-      ;; Return without count as negative
+      ;; Return the 'without' count as negative.
       (let without ((matadors trumps) (count 0))
         (cond
-          ;; Only kicks in if the hand contains no unters and no trumps
+          ;; Only kicks in if the hand contains no unters and no trumps.
           ((null? hand) (- count))
-          ;; Found a card, hit the brake
+          ;; Found a card, hit the brake.
           ((member (car matadors) hand) (- count))
-          ;; No trump in hand yet, keep counting
+          ;; No trump in hand yet, keep counting.
           (else (without (cdr matadors) (add1 count)))))))
 
-;;; TODO: Cleanup
 (define (calculate-value)
-  (define-syntax-rule (++ str x)
-    (begin (set! x (add1 x)) (string-append str (number->string x))))
-  (define hand?             (send hand-box get-value))
-  (define schneider?        (send schneider-box get-value))
-  (define schneider-result? (send schneider-result-box get-value))
-  (define schwarz?          (send schwarz-box get-value))
-  (define schwarz-result?   (send schwarz-result-box get-value))
-  (define ouvert?           (send ouvert-box get-value))
-  (define lost?             (send lost-box get-value))
-  (let* ((base-value (suit-value trump))
-         (matadors (count-matadors))
-         (point (abs matadors)))
-    (~a
-     (suit-name trump) " " base-value
-     (if (negative? matadors) " without " " with ")
-     point
-     (++ ", game " point)
-     (if hand? (++ ", hand " point) "")
-     (if schneider-result? (++ ", schneider " point) "")
-     (if schneider? (++ ", schneider declared " point) "")
-     (if schwarz-result? (++ ", schwarz " point) "")
-     (if schwarz? (++ ", schwarz declared " point) "")
-     (if ouvert? (++ ", ouvert " point) "")
-     (cond (lost? (set! point (* -2 point))
-                  (string-append ", lost " (number->string point)))
-           (else ""))
-     ": "
-     (* point base-value))))
+  (define matadors (count-matadors))
+  (define base-value (suit-value trump))
+  (let loop
+      ;; Matadors are negative if 'without'.
+      ((score (abs matadors))
+       ;; Get boxes (in this exact order) to iterate.
+       (boxes `((,hand-box             . "hand")
+                (,schneider-result-box . "schneider")
+                (,schneider-box        . "schneider declared")
+                (,schwarz-result-box   . "schwarz")
+                (,schwarz-box          . "schwarz declared")
+                (,ouvert-box           . "ouvert")))
+       ;; Prepend the selected trump and its base-value.
+       (text (~a (suit-name trump) " " base-value
+                 ;; Then determine whether the hand is
+                 ;; 'with' or 'without', then append the score.
+                 (if (negative? matadors) " without " " with ") (abs matadors))))
+    (cond
+      ;; Ran out of boxes.
+      ((null? boxes)
+       (if (send lost-box get-value)
+           ;; Multiply the score by -2 if the game was lost.
+           (~a text ", lost " (* -2 score) ": " (* -2 score base-value))
+           ;; Otherwise normally multiply the score.
+           (~a text ": " (* score base-value))))
+      ;; The box in the car is ticked, check its value.
+      ((send (caar boxes) get-value)
+       ;; Increment the score coefficient, then use the text in the cdr.
+       (loop (add1 score) (cdr boxes) (~a text ", " (cdar boxes) " " (add1 score))))
+      ;; The box is the car was not ticked.
+      (else
+       ;; Continue iterating.
+       (loop score (cdr boxes) text)))))
+
 
 (define (calculate-null-value)
   (define hand? (send hand-box get-value))
   (define ouvert? (send ouvert-box get-value))
   (define lost? (send lost-box get-value))
-  ;; Fixed values
+  ;; Null contracts have fixed values.
   (define contract
     (list-ref
      '((" ouvert hand" . 59)
@@ -240,7 +249,7 @@ version
      (if lost? (format ", lost ~a" (* score -2)) ""))))
 
 ;;; Drawing logic
-;; Card dimensions
+;; Dimensions of the cards on the table
 (define card-x-margin 120)
 (define card-y-margin 20)
 (define card-x-size 60)
@@ -249,12 +258,14 @@ version
 
 (define (draw-cards canvas dc)
   (send dc clear)
+  ;; Number of cards in the hand is shown at the top left corner.
   (send dc set-text-foreground "Black")
   (send dc draw-text (number->string (length cards)) 0 0)
+  ;; Render each card in the hand left to right.
   (do ((step 0 (+ step card-spacing))
        (kards cards (cdr kards)))
       ((null? kards))
-    ;; Border
+    ;; Card border
     (send dc set-brush "Brown" 'solid)
     (send dc draw-rectangle
           (+ step card-x-margin) card-y-margin
@@ -296,7 +307,7 @@ version
 (define dc
   (send canvas get-dc))
 
-;;; Contains the rest of the interface
+;;;; Rest of the interface from here on
 (define bid-message
   (new message% (parent frame)
        (label "Pick ten cards")
@@ -323,7 +334,7 @@ version
 
 (define trump-selection
   (new radio-box% (parent options-pane)
-       (label "Trump")
+       (label "Trump:")
        (choices '("Grand" "Acorns/Clubs" "Leaves/Spades" "Hearts" "Bells/Diamonds"))
        (selection 1)
        (style '(horizontal horizontal-label))
@@ -336,13 +347,14 @@ version
             (draw-cards canvas dc))
           (update-value)))))
 
+;;; Announcements before the game begins
 (define declaration-panel
   (new horizontal-panel% (parent options-pane)
        (stretchable-width #f)))
 
 (define contract-message
   (new message% (parent declaration-panel)
-       (label "Contract")))
+       (label "Announcement:")))
 
 (define null-box
   (new check-box% (parent declaration-panel)
@@ -351,14 +363,17 @@ version
         (λ (tickbox event)
           (when (eq? 'check-box (send event get-event-type))
             (set! Null? (send tickbox get-value))
+            ;; Disable all irrelevant declarations if null is ticked.
             (send trump-selection enable (not Null?))
             (send schneider-box enable (not Null?))
             (send schneider-result-box enable (not Null?))
             (send schwarz-box enable (not Null?))
             (send schwarz-result-box enable (not Null?))
+            ;; Sort the cards again.
             (set! cards (sort-cards cards))
             (draw-cards canvas dc)
             (when (not Null?)
+              ;; Untick announcement boxes.
               (send schneider-box set-value #f)
               (send schwarz-box set-value #f)
               (send ouvert-box set-value #f)))
@@ -372,6 +387,7 @@ version
           (when (and (not Null?)
                      (eq? 'check-box (send event get-event-type))
                      (not (send tickbox get-value)))
+            ;; Disable all announcement boxes if this isn't a hand game.
             (send schneider-box set-value #f)
             (send schwarz-box set-value #f)
             (send ouvert-box set-value #f))
@@ -384,12 +400,17 @@ version
         (λ (tickbox event)
           (when (and (not Null?)
                      (eq? 'check-box (send event get-event-type)))
-            (cond ((send schneider-box get-value)
-                   (send schneider-result-box set-value #t)
-                   (send hand-box set-value #t))
-                  (else
-                   (send schwarz-box set-value #f)
-                   (send ouvert-box set-value #f))))
+            (cond
+              ;; If schneider is ticked, hand also needs to be ticked.
+              ((send schneider-box get-value)
+               ;; Schneider always comes with the schneider result.
+               (send schneider-result-box set-value #t)
+               (send hand-box set-value #t))
+              ;; If schneider is unticked, schwarz and ouvert
+              ;; also get automatically unticked.
+              (else
+               (send schwarz-box set-value #f)
+               (send ouvert-box set-value #f))))
           (update-value)))))
 
 (define schwarz-box
@@ -399,13 +420,20 @@ version
         (λ (tickbox event)
           (when (and (not Null?)
                      (eq? 'check-box (send event get-event-type)))
-            (cond ((send schwarz-box get-value)
-                   (send schwarz-result-box set-value #t)
-                   (send schneider-result-box set-value #t)
-                   (send schneider-box set-value #t)
-                   (send hand-box set-value #t))
-                  (else
-                   (send ouvert-box set-value #f))))
+            (cond
+              ;; If schwarz is ticked, schneider and hand
+              ;; also need to be ticked.
+              ((send schwarz-box get-value)
+               ;; Schwarz always comes with
+               ;; the schwarz *and* the schneider results.
+               (send schwarz-result-box set-value #t)
+               (send schneider-result-box set-value #t)
+               (send schneider-box set-value #t)
+               (send hand-box set-value #t))
+              ;; If schwarz is unticked, ouvert
+              ;; also gets automatically unticked.
+              (else
+               (send ouvert-box set-value #f))))
           (update-value)))))
 
 (define ouvert-box
@@ -416,6 +444,8 @@ version
           (when (and (not Null?)
                      (eq? 'check-box (send event get-event-type))
                      (send tickbox get-value))
+            ;; If ouvert is ticked, schwarz, schneider and hand
+            ;; also need to be ticked, with their respective result boxes.
             (send schwarz-result-box set-value #t)
             (send schneider-result-box set-value #t)
             (send schwarz-box set-value #t)
@@ -423,6 +453,7 @@ version
             (send hand-box set-value #t))
           (update-value)))))
 
+;;; Situation at the end of the game
 (define endgame-panel
   (new horizontal-panel% (parent options-pane)
        (stretchable-width #f)))
@@ -434,9 +465,7 @@ version
 (define lost-box
   (new check-box% (parent endgame-panel)
        (label "Lost")
-       (callback
-        (λ (tickbox event)
-          (update-value)))))
+       (callback (thunk* (update-value)))))
 
 (define schneider-result-box
   (new check-box% (parent endgame-panel)
@@ -445,6 +474,8 @@ version
         (λ (tickbox event)
           (when (and (eq? 'check-box (send event get-event-type))
                      (not (send tickbox get-value)))
+            ;; Schneider result is tied to
+            ;; schneider, schwarz, schwarz result and ouvert.
             (send schwarz-result-box set-value #f)
             (send schwarz-box set-value #f)
             (send schneider-box set-value #f)
@@ -458,9 +489,11 @@ version
         (λ (tickbox event)
           (when (and (eq? 'check-box (send event get-event-type)))
             (cond
+              ;; Can't win schwarz without winning schneider.
               ((send tickbox get-value)
                (send schneider-result-box set-value #t))
               (else
+               ;; Schwarz result is tied to schwarz and ouvert.
                (send schwarz-result-box set-value #f)
                (send schwarz-box set-value #f)
                (send ouvert-box set-value #f))))
@@ -488,12 +521,13 @@ version
             (set! cards (sort-cards cards))
             (draw-cards canvas dc))))))
 
+;;; Picking cards for the hand
 (define card-selection
   (new horizontal-pane% (parent frame)
        (alignment '(left top))
        (stretchable-width #f) (stretchable-height #f)))
 
-;;; Generate tickboxes for cards
+;;; Generate tickboxes for cards.
 (for ((suit (in-list (get-suits))))
   (define panel
     (new group-box-panel% (parent card-selection)
@@ -542,6 +576,7 @@ version
 (module+ main
   (application-quit-handler quit)
   (application-about-handler about)
+  ;; Show errors as pop-up messages but also log them to stderr.
   (error-display-handler
    (λ (str ex)
      (displayln str (current-error-port))
