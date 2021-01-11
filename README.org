@@ -1,5 +1,6 @@
 ** [[https://en.wikipedia.org/wiki/Skat_(card_game)][Skat]] calculator
-   I got the contract values straight from [[https://www.pagat.com/schafkopf/skat.html][Pagat]].
+   All values are taken from [[http://www.weddslist.com/skat/ordnung/skatordnung3.html#5-2][die Skatordnung]],
+   except for informal variations, which are taken from [[https://www.pagat.com/schafkopf/skat.html#variations][Pagat]].
 
    You can run it directly with =% racket bidder.rkt=.
 
@@ -15,3 +16,6 @@
 
 **** Grand (French suited, reverse order)
 [[https://user-images.githubusercontent.com/591669/103699985-d28b8a80-4fb4-11eb-8242-6c51b443433f.png]]
+
+**** Leaves with bock, kontra
+[[https://user-images.githubusercontent.com/591669/104188557-77c9b700-542a-11eb-9e32-111ff0496189.png]]

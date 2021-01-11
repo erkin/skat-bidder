@@ -2,7 +2,7 @@
 
 ;;;; Program info
 (define program-name "Skat bid calculator")
-(define program-version "v0.2")
+(define program-version "v0.3")
 
 (define version-message
   (format #<<version
@@ -190,6 +190,28 @@ version
           ;; No trump in hand yet, keep counting.
           (else (without (cdr matadors) (add1 count)))))))
 
+;;; TODO: Clean this mess
+(define (finalise-value score)
+  (define text
+    (cond
+      ((send supra-box get-value)
+       (begin0 (~a ", supra " (* score 8))
+         (set! score (* score 8))))
+      ((send re-box get-value)
+       (begin0 (~a ", re " (* score 4))
+         (set! score (* score 4))))
+      ((send kontra-box get-value)
+       (begin0 (~a ", kontra " (* score 2))
+         (set! score (* score 2))))
+      (else "")))
+  (when (send bock-box get-value)
+    (set! text (~a text ", bock " (* score 2)))
+    (set! score (* score 2)))
+  (when (send lost-box get-value)
+    (set! text (~a text ", lost " (* score -2)))
+    (set! score (* score -2)))
+  (values text score))
+
 (define (calculate-value)
   (define matadors (count-matadors))
   (define base-value (suit-value trump))
@@ -211,11 +233,10 @@ version
     (cond
       ;; Ran out of boxes.
       ((null? boxes)
-       (if (send lost-box get-value)
-           ;; Multiply the score by -2 if the game was lost.
-           (~a text ", lost " (* -2 score) ": " (* -2 score base-value))
-           ;; Otherwise normally multiply the score.
-           (~a text ": " (* score base-value))))
+       (call-with-values
+        (thunk (finalise-value score))
+        (λ (additional-text final-score)
+          (~a text additional-text ": " (* final-score base-value)))))
       ;; The box in the car is ticked, check its value.
       ((send (caar boxes) get-value)
        ;; Increment the score coefficient, then use the text in the cdr.
@@ -229,24 +250,27 @@ version
 (define (calculate-null-value)
   (define hand? (send hand-box get-value))
   (define ouvert? (send ouvert-box get-value))
+  (define revolution? (send revolution-box get-value))
   (define lost? (send lost-box get-value))
   ;; Null contracts have fixed values.
   (define contract
     (list-ref
-     '((" ouvert hand" . 59)
-       (" ouvert" . 46)
-       (" hand" . 35)
-       ("" . 23))
-     (cond ((and hand? ouvert?) 0)
-           (ouvert? 1)
-           (hand? 2)
-           (else 3))))
-  (let ((name (car contract))
+     '(("Revolution" . 92)
+       ("Null ouvert hand" . 59)
+       ("Null ouvert" . 46)
+       ("Null hand" . 35)
+       ("Null" . 23))
+     (cond (revolution? 0)
+           ((and hand? ouvert?) 1)
+           (ouvert? 2)
+           (hand? 3)
+           (else 4))))
+  (let ((text (car contract))
         (score (cdr contract)))
-    (~a
-     "Null" name
-     " " score
-     (if lost? (format ", lost ~a" (* score -2)) ""))))
+    (call-with-values
+     (thunk (finalise-value score))
+     (λ (additional-text final-score)
+       (~a text " " score additional-text)))))
 
 ;;; Drawing logic
 ;; Dimensions of the cards on the table
@@ -361,22 +385,23 @@ version
        (label "Null")
        (callback
         (λ (tickbox event)
-          (when (eq? 'check-box (send event get-event-type))
-            (set! Null? (send tickbox get-value))
-            ;; Disable all irrelevant declarations if null is ticked.
-            (send trump-selection enable (not Null?))
-            (send schneider-box enable (not Null?))
-            (send schneider-result-box enable (not Null?))
-            (send schwarz-box enable (not Null?))
-            (send schwarz-result-box enable (not Null?))
-            ;; Sort the cards again.
-            (set! cards (sort-cards cards))
-            (draw-cards canvas dc)
-            (when (not Null?)
-              ;; Untick announcement boxes.
-              (send schneider-box set-value #f)
-              (send schwarz-box set-value #f)
-              (send ouvert-box set-value #f)))
+          (set! Null? (send tickbox get-value))
+          ;; Disable all irrelevant declarations if null is ticked.
+          (send trump-selection enable (not Null?))
+          (send schneider-box enable (not Null?))
+          (send schneider-result-box enable (not Null?))
+          (send schwarz-box enable (not Null?))
+          (send schwarz-result-box enable (not Null?))
+          (send revolution-box enable Null?)
+          ;; Sort the cards again.
+          (set! cards (sort-cards cards))
+          (draw-cards canvas dc)
+          (when (not Null?)
+            ;; Untick announcement boxes.
+            (send schneider-box set-value #f)
+            (send schwarz-box set-value #f)
+            (send ouvert-box set-value #f)
+            (send revolution-box set-value #f))
           (update-value)))))
 
 (define hand-box
@@ -384,13 +409,15 @@ version
        (label "Hand")
        (callback
         (λ (tickbox event)
-          (when (and (not Null?)
-                     (eq? 'check-box (send event get-event-type))
+          (when (and (eq? 'check-box (send event get-event-type))
                      (not (send tickbox get-value)))
             ;; Disable all announcement boxes if this isn't a hand game.
-            (send schneider-box set-value #f)
-            (send schwarz-box set-value #f)
-            (send ouvert-box set-value #f))
+            (if Null?
+                (send revolution-box set-value #f)
+                (begin
+                  (send schneider-box set-value #f)
+                  (send schwarz-box set-value #f)
+                  (send ouvert-box set-value #f))))
           (update-value)))))
 
 (define schneider-box
@@ -441,15 +468,78 @@ version
        (label "Ouvert")
        (callback
         (λ (tickbox event)
-          (when (and (not Null?)
-                     (eq? 'check-box (send event get-event-type))
+          (when (eq? 'check-box (send event get-event-type))
+            (cond
+              ((and (not Null?) (send tickbox get-value))
+               ;; If ouvert is ticked, schwarz, schneider and hand
+               ;; also need to be ticked, with their respective result boxes.
+               (send schwarz-result-box set-value #t)
+               (send schneider-result-box set-value #t)
+               (send schwarz-box set-value #t)
+               (send schneider-box set-value #t)
+               (send hand-box set-value #t))
+              ((and Null? (not (send tickbox get-value)))
+               (send revolution-box set-value #f))))
+          (update-value)))))
+
+;;; Additional declarations
+(define misc-panel
+  (new horizontal-panel% (parent options-pane)
+       (stretchable-width #f)))
+
+(define misc-message
+  (new message% (parent misc-panel)
+       (label "Custom:")))
+
+(define bock-box
+  (new check-box% (parent misc-panel)
+       (label "Bock")
+       (callback (thunk* (update-value)))))
+
+(define kontra-box
+  (new check-box% (parent misc-panel)
+       (label "Kontra")
+       (callback
+        (λ (tickbox event)
+          (when (and (eq? 'check-box (send event get-event-type))
+                     (not (send tickbox get-value)))
+            (send re-box set-value #f)
+            (send supra-box set-value #f))
+          (update-value)))))
+
+(define re-box
+  (new check-box% (parent misc-panel)
+       (label "Re")
+       (callback
+        (λ (tickbox event)
+          (when (eq? 'check-box (send event get-event-type))
+            (if (send tickbox get-value)
+                (send kontra-box set-value #t)
+                (send supra-box set-value #f)))
+          (update-value)))))
+
+(define supra-box
+  (new check-box% (parent misc-panel)
+       (label "Supra")
+       (callback
+        (λ (tickbox event)
+          (when (and (eq? 'check-box (send event get-event-type))
                      (send tickbox get-value))
-            ;; If ouvert is ticked, schwarz, schneider and hand
-            ;; also need to be ticked, with their respective result boxes.
-            (send schwarz-result-box set-value #t)
-            (send schneider-result-box set-value #t)
-            (send schwarz-box set-value #t)
-            (send schneider-box set-value #t)
+            (send kontra-box set-value #t)
+            (send re-box set-value #t)
+            (send supra-box set-value #t))
+          (update-value)))))
+
+(define revolution-box
+  (new check-box% (parent misc-panel)
+       (label "Revolution")
+       (enabled #f)
+       (callback
+        (λ (tickbox event)
+          (when (and (eq? 'check-box (send event get-event-type))
+                     (send tickbox get-value))
+            (send null-box set-value #t)
+            (send ouvert-box set-value #t)
             (send hand-box set-value #t))
           (update-value)))))
 
