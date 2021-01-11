@@ -7,6 +7,8 @@
 (define version-message
   (format #<<version
 ~a ~a
+https://github.com/erkin/skat-bidder
+
 Copyright (C) 2021 Erkin Batu Altunbas
 Each file of this project's source code is subject 
 to the terms of the Mozilla Public Licence v2.0
@@ -550,7 +552,7 @@ version
 
 (define result-message
   (new message% (parent endgame-panel)
-      (label "Result")))
+      (label "Result:")))
 
 (define lost-box
   (new check-box% (parent endgame-panel)
