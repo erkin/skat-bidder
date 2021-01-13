@@ -1,8 +1,9 @@
+#!/usr/bin/env racket
 #lang racket/gui
 
 ;;;; Program info
 (define program-name "Skat bid calculator")
-(define program-version "v0.3")
+(define program-version "v0.4")
 
 (define version-message
   (format #<<version
@@ -165,12 +166,12 @@ version
   ;; Take only the top four cards if grand is declared, otherwise take them all.
   (define hand
     (parameterize ((reversed? #f))
-      (take (sort-cards cards) (if (eq? trump 'Grand) 4 10))))
+      (take (sort-cards cards) (if (eq? trump 'Grand) 4 11))))
   ;; Likewise. In the case of grand, trumps contains the unters only.
-  ;; Otherwise it contains the top ten trumps: 4 unters and 6 of selected suit, descending.
+  ;; Otherwise it contains the eleven trumps: 4 unters and the selected suit, descending.
   (define trumps
     (parameterize ((reversed? #f))
-      (take (sort-cards deck) (if (eq? trump 'Grand) 4 10))))
+      (take (sort-cards deck) (if (eq? trump 'Grand) 4 11))))
   ;; Playing 'with' or 'without' is determined by the unter of acorns.
   (if (member (card 'Unter 'Acorns) hand)
       (let with ((hand hand) (matadors trumps) (count 0))
@@ -219,7 +220,7 @@ version
   (define base-value (suit-value trump))
   (let loop
       ;; Matadors are negative if 'without'.
-      ((score (abs matadors))
+      ((score (add1 (abs matadors)))
        ;; Get boxes (in this exact order) to iterate.
        (boxes `((,hand-box             . "hand")
                 (,schneider-result-box . "schneider")
@@ -231,7 +232,8 @@ version
        (text (~a (suit-name trump) " " base-value
                  ;; Then determine whether the hand is
                  ;; 'with' or 'without', then append the score.
-                 (if (negative? matadors) " without " " with ") (abs matadors))))
+                 (if (negative? matadors) " without " " with ") (abs matadors)
+                 ", play " (add1 (abs matadors)))))
     (cond
       ;; Ran out of boxes.
       ((null? boxes)
@@ -247,7 +249,6 @@ version
       (else
        ;; Continue iterating.
        (loop score (cdr boxes) text)))))
-
 
 (define (calculate-null-value)
   (define hand? (send hand-box get-value))
@@ -336,7 +337,7 @@ version
 ;;;; Rest of the interface from here on
 (define bid-message
   (new message% (parent frame)
-       (label "Pick ten cards")
+       (label "Pick twelve cards")
        (enabled #f)
        (horiz-margin 10) (vert-margin 10)
        (auto-resize #t)))
@@ -347,10 +348,10 @@ version
        (stretchable-height #f)))
 
 (define (update-value)
-  (if (< (length cards) 10)
+  (if (< (length cards) 12)
       (send* bid-message
         (enable #f)
-        (set-label "Pick ten cards"))
+        (set-label "Pick twelve cards"))
       (send* bid-message
         (enable #t)
         (set-label
@@ -639,7 +640,7 @@ version
                  (remove-card! the-card)
                  (draw-cards canvas dc))
                 ;; Toggled on but there are too many cards
-                ((>= (length cards) 10)
+                ((>= (length cards) 12)
                  (send tickbox set-value #f))
                 ;; Toggled on
                 (else
