@@ -5,10 +5,10 @@
    You can run it directly with =% ./bidder.rkt=.
 
 *** Screenshots
-**** Hearts hand
+**** Hearts hand with seven tops
 [[https://user-images.githubusercontent.com/591669/104413085-ace71e00-557e-11eb-9dc4-54eb8c35a6de.png]]
 
-**** Grand schneider, declared, schwarz (French suited)
+**** Grand, schneider declared, schwarz (French suited)
 [[https://user-images.githubusercontent.com/591669/104413123-c4bea200-557e-11eb-889b-27faefc26182.png]]
 
 **** Null ouvert hand, lost in a bock round
