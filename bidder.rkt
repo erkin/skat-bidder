@@ -277,7 +277,7 @@ version
 
 ;;; Drawing logic
 ;; Dimensions of the cards on the table
-(define card-x-margin 120)
+(define card-x-margin 90)
 (define card-y-margin 20)
 (define card-x-size 60)
 (define card-y-size 100)
