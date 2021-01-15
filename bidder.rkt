@@ -193,27 +193,26 @@ version
           ;; No trump in hand yet, keep counting.
           (else (without (cdr matadors) (add1 count)))))))
 
-;;; TODO: Clean this mess
-(define (finalise-value score)
-  (define text
-    (cond
-      ((send supra-box get-value)
-       (begin0 (~a ", supra " (* score 8))
-         (set! score (* score 8))))
-      ((send re-box get-value)
-       (begin0 (~a ", re " (* score 4))
-         (set! score (* score 4))))
-      ((send kontra-box get-value)
-       (begin0 (~a ", kontra " (* score 2))
-         (set! score (* score 2))))
-      (else "")))
+;;; TODO: Maybe a better/functional way to do this?
+(define (finalise-value points)
+  (define text "")
+  (define score points)
+  (define-syntax-rule (update-score! new-text new-score)
+    (begin
+      (set! text (~a text ", " new-text " " (* score new-score)))
+      (set! score (* score new-score))))
+  (cond
+    ((send supra-box get-value)
+     (update-score! "supra" 8))
+    ((send re-box get-value)
+     (update-score! "re" 4))
+    ((send kontra-box get-value)
+     (update-score! "kontra" 2)))
   (when (send bock-box get-value)
-    (set! text (~a text ", bock " (* score 2)))
-    (set! score (* score 2)))
+    (update-score! "bock" 2))
   (when (send lost-box get-value)
-    (set! text (~a text ", lost " (* score -2)))
-    (set! score (* score -2)))
-  (values text score))
+    (update-score! "lost" -2))
+  (values text points))
 
 (define (calculate-value)
   (define matadors (count-matadors))
