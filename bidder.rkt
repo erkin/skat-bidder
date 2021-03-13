@@ -54,7 +54,8 @@ version
 (define (card-letter card)
   (let ((rank (card-rank card)))
     (case rank
-      ((Deuce) "A")
+      ((Deuce) (if French? "A" "2"))
+      ((Tenner) (if French? "10" "X"))
       ((King) "K")
       ((Ober) (if French? "Q" "O"))
       ((Unter) (if French? "J" "U"))
@@ -91,6 +92,7 @@ version
         (number->string rank)
         (case rank
           ((Deuce) "Deuce/Ace")
+          ((Tenner) "Ten")
           ((King) "King")
           ((Ober) "Ober/Queen")
           ((Unter) "Unter/Jack")))))
@@ -98,8 +100,8 @@ version
 ;;; Sorting logic
 (define (get-ranks)
   (if Null?
-      '(Deuce King Ober Unter 10 9 8 7)
-      '(Deuce 10 King Ober Unter 9 8 7)))
+      '(Deuce King Ober Unter Tenner 9 8 7)
+      '(Deuce Tenner King Ober Unter 9 8 7)))
 (define default-suits
   '(Acorns Leaves Hearts Bells))
 (define (get-suits)
