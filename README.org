@@ -2,7 +2,7 @@
    All values are taken from [[http://www.weddslist.com/skat/ordnung/skatordnung3.html#5-2][die Skatordnung]],
    except for informal variations, which are taken from [[https://www.pagat.com/schafkopf/skat.html#variations][Pagat]].
 
-   You can run it directly with =% ./bidder.rkt=.
+   You can run it directly with =% ./bidder=.
 
 *** Screenshots
 **** Hearts hand with seven tops

@@ -3,14 +3,14 @@
 
 ;;;; Program info
 (define program-name "Skat bid calculator")
-(define program-version "v0.4")
+(define program-version "v1.0")
 
 (define version-message
   (format #<<version
 ~a ~a
 https://github.com/erkin/skat-bidder
 
-Copyright (C) 2021 Erkin Batu Altunbas
+Copyright (C) 2021 Lulu Cathrinus Grimalkin
 Each file of this project's source code is subject 
 to the terms of the Mozilla Public Licence v2.0
 https://mozilla.org/MPL/2.0/
