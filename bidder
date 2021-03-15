@@ -3,7 +3,7 @@
 
 ;;;; Program info
 (define program-name "Skat bid calculator")
-(define program-version "v1.0")
+(define program-version "v1.1")
 
 (define version-message
   (format #<<version
@@ -101,7 +101,7 @@ version
 (define (get-ranks)
   (if Null?
       '(Deuce King Ober Unter Tenner 9 8 7)
-      '(Deuce Tenner King Ober Unter 9 8 7)))
+      '(Unter Deuce Tenner King Ober 9 8 7)))
 (define default-suits
   '(Acorns Leaves Hearts Bells))
 (define (get-suits)
