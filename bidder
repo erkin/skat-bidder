@@ -3,7 +3,7 @@
 
 ;;;; Program info
 (define program-name "Skat bid calculator")
-(define program-version "v1.1")
+(define program-version "v1.2")
 
 (define version-message
   (format #<<version
@@ -75,7 +75,8 @@ version
     ((Leaves) 11)
     ((Hearts) 10)
     ((Bells)   9)
-    ((Grand)  24)))
+    ((Grand)
+     (string->number (send grand-menu get-string-selection)))))
 
 ;; For selection
 (define (suit-name suit)
@@ -91,11 +92,11 @@ version
     (if (number? rank)
         (number->string rank)
         (case rank
-          ((Deuce) "Deuce/Ace")
+          ((Deuce)  "Deuce/Ace")
           ((Tenner) "Ten")
-          ((King) "King")
-          ((Ober) "Ober/Queen")
-          ((Unter) "Unter/Jack")))))
+          ((King)   "King")
+          ((Ober)   "Ober/Queen")
+          ((Unter)  "Unter/Jack")))))
 
 ;;; Sorting logic
 (define (get-ranks)
@@ -108,6 +109,9 @@ version
   (if (eq? trump 'Grand)
       default-suits
       (cons trump (remove trump default-suits))))
+
+(define (get-spitzen)
+  (map number->string (range (if (eq? trump 'Grand) 5 11))))
 
 (define ((>? list accessor) a b)
   (let loop ((lst list))
@@ -203,6 +207,10 @@ version
     (begin
       (set! text (~a text ", " new-text " " (* score new-score)))
       (set! score (* score new-score))))
+  (let ((spitze (string->number (send spitze-menu get-string-selection))))
+    (unless (zero? spitze)
+      (set! score (+ score spitze))
+      (set! text (format "~a, spitze (~a) ~a" text spitze score))))
   (cond
     ((send supra-box get-value)
      (update-score! "supra" 8))
@@ -214,7 +222,7 @@ version
     (update-score! "bock" 2))
   (when (send lost-box get-value)
     (update-score! "lost" -2))
-  (values text points))
+  (values text score))
 
 (define (calculate-value)
   (define matadors (count-matadors))
@@ -368,10 +376,15 @@ version
        (style '(horizontal horizontal-label))
        (callback
         (λ (radiobox event)
+          ;; If the trump changed
           (when (eq? 'radio-box (send event get-event-type))
-            (set! trump (list-ref '(Grand Acorns Leaves Hearts Bells)
+            ;; Clear the spitze menu.
+            (send spitze-menu clear)
+            ;; Set the given trump.
+            (set-trump! (list-ref '(Grand Acorns Leaves Hearts Bells)
                                   (send radiobox get-selection)))
-            (set! cards (sort-cards cards))
+            ;; Add the new spitze values.
+            (for-each (λ (str) (send spitze-menu append str)) (get-spitzen))
             (draw-cards canvas dc))
           (update-value)))))
 
@@ -534,6 +547,12 @@ version
             (send supra-box set-value #t))
           (update-value)))))
 
+(define spitze-menu
+  (new choice% (parent misc-panel)
+       (label "Spitze")
+       (choices (map number->string (range 11)))
+       (callback (thunk* (update-value)))))
+
 (define revolution-box
   (new check-box% (parent misc-panel)
        (label "Revolution")
@@ -614,6 +633,12 @@ version
             (reversed? (send tickbox get-value))
             (set! cards (sort-cards cards))
             (draw-cards canvas dc))))))
+
+(define grand-menu
+  (new choice% (parent top-panel)
+       (label "Grand value")
+       (choices '("24" "20"))
+       (callback (thunk* (update-value)))))
 
 ;;; Picking cards for the hand
 (define card-selection
