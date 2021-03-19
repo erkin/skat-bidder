@@ -208,7 +208,7 @@ version
       (set! text (~a text ", " new-text " " (* score new-score)))
       (set! score (* score new-score))))
   (let ((spitze (string->number (send spitze-menu get-string-selection))))
-    (unless (zero? spitze)
+    (unless (or Null? (zero? spitze))
       (set! score (+ score spitze))
       (set! text (format "~a, spitze (~a) ~a" text spitze score))))
   (cond
@@ -378,13 +378,20 @@ version
         (λ (radiobox event)
           ;; If the trump changed
           (when (eq? 'radio-box (send event get-event-type))
-            ;; Clear the spitze menu.
-            (send spitze-menu clear)
+            ;; Get the previous selection before clearing.
+            (define previous-spitze (send spitze-menu get-string-selection))
             ;; Set the given trump.
             (set-trump! (list-ref '(Grand Acorns Leaves Hearts Bells)
                                   (send radiobox get-selection)))
-            ;; Add the new spitze values.
+            ;; Clear the spitze menu and add new values.
+            (send spitze-menu clear)
             (for-each (λ (str) (send spitze-menu append str)) (get-spitzen))
+            ;; Try to set the new selection to the previous one.
+            ;; Failing that, select '4', the highest value guaranteed to be there.
+            (send spitze-menu set-string-selection
+                  (if (send spitze-menu find-string previous-spitze)
+                      previous-spitze
+                      "4"))
             (draw-cards canvas dc))
           (update-value)))))
 
@@ -409,16 +416,11 @@ version
           (send schneider-result-box enable (not Null?))
           (send schwarz-box enable (not Null?))
           (send schwarz-result-box enable (not Null?))
+          (send spitze-menu enable (not Null?))
           (send revolution-box enable Null?)
           ;; Sort the cards again.
           (set! cards (sort-cards cards))
           (draw-cards canvas dc)
-          (when (not Null?)
-            ;; Untick announcement boxes.
-            (send schneider-box set-value #f)
-            (send schwarz-box set-value #f)
-            (send ouvert-box set-value #f)
-            (send revolution-box set-value #f))
           (update-value)))))
 
 (define hand-box
