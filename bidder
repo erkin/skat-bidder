@@ -326,7 +326,7 @@ version
        (label (string-append program-name " " program-version))
        (style '(no-resize-border))
        (width 680)  (min-width 680)
-       (height 500) (min-height 500)
+       (height 525) (min-height 525)
        (stretchable-width #f) (stretchable-height #f)))
 
 ;;; Contains aesthetic options
