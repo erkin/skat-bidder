@@ -76,7 +76,9 @@ version
     ((Hearts) 10)
     ((Bells)   9)
     ((Grand)
-     (string->number (send grand-menu get-string-selection)))))
+     (if (and (send grand-ouvert-box get-value) (send ouvert-box get-value))
+         36
+         (string->number (send grand-menu get-string-selection))))))
 
 ;; For selection
 (define (suit-name suit)
@@ -111,7 +113,29 @@ version
       (cons trump (remove trump default-suits))))
 
 (define (get-spitzen)
-  (map number->string (range (if (eq? trump 'Grand) 5 11))))
+  (define trumps
+    ;; Put the trumps in reverse order.
+    (parameterize ((reversed? #t))
+      (sort-cards
+       ;; Sort the top-down deck and take the trumps at the top.
+       (parameterize ((reversed? #f))
+         (take (sort-cards deck) (if (eq? trump 'Grand) 4 11))))))
+  (define hand
+    ;; Find the intersection of all trumps and this hand, then sort it bottom-up.
+    (parameterize ((reversed? #t))
+      (sort-cards (set->list (set-intersect (list->set cards) (list->set trumps))))))
+  ;; Return list of strings from zero to the number of spitzen possible in this hand.
+  (map number->string
+       (range
+        (let with ((hand hand) (spitzen trumps) (count 1))
+          (cond
+            ;; No spitzen in hand.
+            ((null? hand) count)
+            ;; Card matches, keep counting.
+            ((equal? (car hand) (car spitzen))
+             (with (cdr hand) (cdr spitzen) (add1 count)))
+            ;; Missing a card, hit the brake.
+            (else count))))))
 
 (define ((>? list accessor) a b)
   (let loop ((lst list))
@@ -203,12 +227,13 @@ version
 (define (finalise-value points)
   (define text "")
   (define score points)
+  (define lost? (send lost-box get-value))
   (define-syntax-rule (update-score! new-text new-score)
     (begin
       (set! text (~a text ", " new-text " " (* score new-score)))
       (set! score (* score new-score))))
   (let ((spitze (string->number (send spitze-menu get-string-selection))))
-    (unless (or Null? (zero? spitze))
+    (unless (or Null? lost? (zero? spitze))
       (set! score (+ score spitze))
       (set! text (format "~a, spitze (~a) ~a" text spitze score))))
   (cond
@@ -220,7 +245,7 @@ version
      (update-score! "kontra" 2)))
   (when (send bock-box get-value)
     (update-score! "bock" 2))
-  (when (send lost-box get-value)
+  (when lost?
     (update-score! "lost" -2))
   (values text score))
 
@@ -356,6 +381,15 @@ version
        (alignment '(center center))
        (stretchable-height #f)))
 
+(define (update-spitze-menu)
+  (send spitze-menu clear)
+  (cond
+    ((= (length cards) 12)
+     (for-each (λ (str) (send spitze-menu append str)) (get-spitzen))
+     (send spitze-menu enable #t))
+    (else
+     (send spitze-menu enable #f))))
+
 (define (update-value)
   (if (< (length cards) 12)
       (send* bid-message
@@ -378,21 +412,11 @@ version
         (λ (radiobox event)
           ;; If the trump changed
           (when (eq? 'radio-box (send event get-event-type))
-            ;; Get the previous selection before clearing.
-            (define previous-spitze (send spitze-menu get-string-selection))
             ;; Set the given trump.
             (set-trump! (list-ref '(Grand Acorns Leaves Hearts Bells)
                                   (send radiobox get-selection)))
-            ;; Clear the spitze menu and add new values.
-            (send spitze-menu clear)
-            (for-each (λ (str) (send spitze-menu append str)) (get-spitzen))
-            ;; Try to set the new selection to the previous one.
-            ;; Failing that, select '4', the highest value guaranteed to be there.
-            (send spitze-menu set-string-selection
-                  (if (send spitze-menu find-string previous-spitze)
-                      previous-spitze
-                      "4"))
             (draw-cards canvas dc))
+          (update-spitze-menu)
           (update-value)))))
 
 ;;; Announcements before the game begins
@@ -552,7 +576,8 @@ version
 (define spitze-menu
   (new choice% (parent misc-panel)
        (label "Spitze")
-       (choices (map number->string (range 11)))
+       (choices '())
+       (enabled #f)
        (callback (thunk* (update-value)))))
 
 (define revolution-box
@@ -642,6 +667,11 @@ version
        (choices '("24" "20"))
        (callback (thunk* (update-value)))))
 
+(define grand-ouvert-box
+  (new check-box% (parent top-panel)
+       (label "Grand ouvert value 36?")
+       (callback (thunk* (update-value)))))
+
 ;;; Picking cards for the hand
 (define card-selection
   (new horizontal-pane% (parent frame)
@@ -674,6 +704,7 @@ version
                 (else
                  (add-card! the-card)
                  (draw-cards canvas dc))))
+            (update-spitze-menu)
             (update-value))))))
 
 (define bottom-panel
