@@ -1,9 +1,16 @@
 #!/usr/bin/env racket
-#lang racket/gui
+#lang racket/base
+(require racket/gui/base
+         racket/class
+         racket/list
+         racket/set
+         racket/function
+         racket/format
+         racket/string)
 
 ;;;; Program info
 (define program-name "Skat bid calculator")
-(define program-version "v2.1")
+(define program-version "v2.2")
 
 (define version-message
   (format #<<version
@@ -393,25 +400,40 @@ version
        (callback
         (λ (list-box event)
           (let ((selected? (and (send list-box get-selection) #t)))
-            (send player-selection-button enable selected?)
+            (send player-score-button enable (and selected? (not (zero? current-value))))
+            (send player-clear-button enable selected?)
             (send remove-round-button enable selected?))))))
 
-(define player-selection-button
-  (new button% (parent player-selection-pane)
+(define (set-player-score! score)
+  (let ((selection (send game-list get-selection)))
+    (when selection
+     (send* game-list
+       (set-data selection
+                 (list-set (send game-list get-data selection)
+                           (send player-selection-choice get-selection)
+                           score))
+       (set-string selection
+                   (string-join (map number->string (send game-list get-data selection)) "\n"))))
+    (update-total!)))
+
+(define scoring-button-pane
+  (new vertical-pane% (parent player-selection-pane)
+       (alignment '(center center))
+       (stretchable-height #f)))
+
+(define player-score-button
+  (new button% (parent scoring-button-pane)
        (label "Score!")
        (enabled #f)
        (callback
-        (thunk*
-         (let ((selection (send game-list get-selection)))
-           (when selection
-             (send* game-list
-               (set-data selection
-                         (list-set (send game-list get-data selection)
-                                   (send player-selection-choice get-selection)
-                                   current-value))
-               (set-string selection
-                           (string-join (map number->string (send game-list get-data selection)) "\n")))
-             (update-total!)))))))
+        (thunk* (set-player-score! current-value)))))
+
+(define player-clear-button
+  (new button% (parent scoring-button-pane)
+       (label "Reset!")
+       (enabled #f)
+       (callback
+        (thunk* (set-player-score! 0)))))
 
 (define total-message
   (new message% (parent game-pane)
@@ -450,10 +472,11 @@ version
         (λ (button event)
          (let ((selection (send game-list get-selection)))
            (when selection
-             (update-total!)
              (send game-list delete selection)
+             (update-total!)
              (send button enable #f)
-             (send player-selection-button enable #f)))))))
+             (send player-score-button enable #f)
+             (send player-clear-button enable #f)))))))
 
 ;; Contains all the main options.
 (define main-panel
@@ -494,20 +517,16 @@ version
      (send spitze-menu enable #f))))
 
 (define (update-value!)
-  (cond ((< (length cards) 12)
-         (send* bid-message
-           (enable #f)
-           (set-label "Pick twelve cards"))
-         (send player-selection-button enable #f)
-         (set! current-value 0))
-        (else
-         (send* bid-message
-           (enable #t)
-           (set-label
-            (if Null?
-                (calculate-null-value!)
-                (calculate-value!))))
-         (send player-selection-button enable #t))))
+  (let ((full-hand? (= (length cards) 12)))
+    (unless full-hand? (set! current-value 0))
+    (send bid-message set-label
+          (if full-hand?
+              (if Null?
+                  (calculate-null-value!)
+                  (calculate-value!))
+              "Pick twelve cards"))
+    (send bid-message enable full-hand?)
+    (send player-score-button enable (and (send game-list get-selection) full-hand?))))
 
 (define trump-selection
   (new radio-box% (parent main-panel)
