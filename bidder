@@ -3,7 +3,7 @@
 
 ;;;; Program info
 (define program-name "Skat bid calculator")
-(define program-version "v1.2")
+(define program-version "v2.0")
 
 (define version-message
   (format #<<version
@@ -32,6 +32,7 @@ version
 (define French? #f)
 (define reversed? (make-parameter #f))
 (define cards '())
+(define current-value 0)
 
 ;;;; Card data structure
 (struct card (rank suit)
@@ -46,7 +47,7 @@ version
 (define (card-colour card)
   (send the-color-database find-color
         (case (card-suit card)
-          ((Acorns) (if French? "Black" "DarkGoldenrod"))
+          ((Acorns) (if French? "Black" "DarkRed"))
           ((Leaves) (if French? "Black" "DarkGreen"))
           ((Hearts) "Red")
           ((Bells)  (if French? "Red" "Orange")))))
@@ -274,7 +275,8 @@ version
        (call-with-values
         (thunk (finalise-value score))
         (λ (additional-text final-score)
-          (~a text additional-text ": " (* final-score base-value)))))
+          (set! current-value (* final-score base-value))
+          (~a text additional-text ": " current-value))))
       ;; The box in the car is ticked, check its value.
       ((send (caar boxes) get-value)
        ;; Increment the score coefficient, then use the text in the cdr.
@@ -307,11 +309,12 @@ version
     (call-with-values
      (thunk (finalise-value score))
      (λ (additional-text final-score)
+       (set! current-value final-score)
        (~a text " " score additional-text)))))
 
 ;;; Drawing logic
 ;; Dimensions of the cards on the table
-(define card-x-margin 90)
+(define card-x-margin 40)
 (define card-y-margin 20)
 (define card-x-size 60)
 (define card-y-size 100)
@@ -355,29 +358,121 @@ version
        (stretchable-width #f) (stretchable-height #f)))
 
 ;;; Contains aesthetic options
-(define top-panel
+(define top-pane
   (new horizontal-panel% (parent frame)
        (alignment '(left center))
        (stretchable-height #f)))
 
+;; Separates the round list from the options.
+(define divider-pane
+  (new horizontal-pane% (parent frame)
+       (alignment '(left center))))
+
+;; Round list and buttons thereof
+(define game-pane
+  (new vertical-pane% (parent divider-pane)
+       (alignment '(center center))
+       (stretchable-height #t)))
+
+(define player-selection-pane
+  (new horizontal-pane% (parent game-pane)
+       (alignment '(left center))
+       (stretchable-height #f)))
+
+(define player-selection-choice
+  (new radio-box% (parent player-selection-pane)
+       (label "")
+       (choices '("#1" "#2" "#3"))))
+
+;; Each round played
+(define game-list
+  (new list-box% (parent game-pane)
+       (label "")
+       (choices '())
+       (vert-margin 0)))
+
+(define player-selection-button
+  (new button% (parent player-selection-pane)
+       (label "Score!")
+       (enabled #f)
+       (callback
+        (thunk*
+         (let ((selection (send game-list get-selection)))
+           (when selection
+             (send* game-list
+               (set-data selection
+                         (list-set (send game-list get-data selection)
+                                   (send player-selection-choice get-selection)
+                                   current-value))
+               (set-string selection
+                           (string-join (map number->string (send game-list get-data selection)) "\n")))
+             (update-total!)))))))
+
+(define total-message
+  (new message% (parent game-pane)
+       (label "Total\n0\n0\n0")
+       (stretchable-height #f)))
+
+(define (update-total!)
+  (send total-message set-label
+        (if (zero? (send game-list get-number))
+            "Total\n0\n0\n0"
+            (string-join
+             #:before-first "Total\n"
+             (map number->string
+                  (for/fold ((sum '(0 0 0)))
+                            ((i (in-range 0 (send game-list get-number))))
+                    (map + (send game-list get-data i) sum)))
+             "\n"))))
+
+(define round-buttons-pane
+  (new horizontal-pane% (parent game-pane)
+       (alignment '(center center))
+       (stretchable-height #f)))
+
+(define add-round-button
+  (new button% (parent round-buttons-pane)
+       (label "+")
+       (callback
+        (thunk*
+         (send game-list append "0\n0\n0" '(0 0 0))))))
+
+(define remove-round-button
+  (new button% (parent round-buttons-pane)
+       (label "-")
+       (callback
+        (thunk*
+         (let ((selection (send game-list get-selection)))
+           (when selection
+             (send game-list delete selection)
+             (update-total!)))))))
+
+;; Contains all the main options.
+(define main-panel
+  (new vertical-panel% (parent divider-pane)
+       (alignment '(center top))
+       (stretchable-height #f)))
+
+;; Card graphics
 (define canvas
-  (new canvas% (parent frame)
+  (new canvas% (parent main-panel)
        (style '(no-focus))
-       (paint-callback draw-cards)))
+       (paint-callback draw-cards)
+       (min-width 180) (min-height 80)))
 
 (define dc
   (send canvas get-dc))
 
 ;;;; Rest of the interface from here on
 (define bid-message
-  (new message% (parent frame)
+  (new message% (parent main-panel)
        (label "Pick twelve cards")
        (enabled #f)
        (horiz-margin 10) (vert-margin 10)
        (auto-resize #t)))
 
 (define options-pane
-  (new vertical-pane% (parent frame)
+  (new vertical-pane% (parent main-panel)
        (alignment '(center center))
        (stretchable-height #f)))
 
@@ -391,19 +486,23 @@ version
      (send spitze-menu enable #f))))
 
 (define (update-value)
-  (if (< (length cards) 12)
-      (send* bid-message
-        (enable #f)
-        (set-label "Pick twelve cards"))
-      (send* bid-message
-        (enable #t)
-        (set-label
-         (if Null?
-             (calculate-null-value)
-             (calculate-value))))))
+  (cond ((< (length cards) 12)
+         (send* bid-message
+           (enable #f)
+           (set-label "Pick twelve cards"))
+         (send player-selection-button enable #f)
+         (set! current-value 0))
+        (else
+         (send* bid-message
+           (enable #t)
+           (set-label
+            (if Null?
+                (calculate-null-value)
+                (calculate-value))))
+         (send player-selection-button enable #t))))
 
 (define trump-selection
-  (new radio-box% (parent options-pane)
+  (new radio-box% (parent main-panel)
        (label "Trump:")
        (choices '("Grand" "Acorns/Clubs" "Leaves/Spades" "Hearts" "Bells/Diamonds"))
        (selection 1)
@@ -640,7 +739,7 @@ version
           (update-value)))))
 
 (define style-box
- (new radio-box% (parent top-panel)
+ (new radio-box% (parent top-pane)
       (label "Suit")
       (choices '("French" "German"))
       (selection 1)
@@ -652,7 +751,7 @@ version
            (draw-cards canvas dc))))))
 
 (define reversed-box
-  (new check-box% (parent top-panel)
+  (new check-box% (parent top-pane)
        (label "Reverse order")
        (callback
         (λ (tickbox event)
@@ -662,19 +761,19 @@ version
             (draw-cards canvas dc))))))
 
 (define grand-menu
-  (new choice% (parent top-panel)
+  (new choice% (parent top-pane)
        (label "Grand value")
        (choices '("24" "20"))
        (callback (thunk* (update-value)))))
 
 (define grand-ouvert-box
-  (new check-box% (parent top-panel)
+  (new check-box% (parent top-pane)
        (label "Grand ouvert value 36?")
        (callback (thunk* (update-value)))))
 
 ;;; Picking cards for the hand
 (define card-selection
-  (new horizontal-pane% (parent frame)
+  (new horizontal-pane% (parent main-panel)
        (alignment '(left top))
        (stretchable-width #f) (stretchable-height #f)))
 
@@ -707,18 +806,18 @@ version
             (update-spitze-menu)
             (update-value))))))
 
-(define bottom-panel
-  (new horizontal-panel% (parent frame)
+(define bottom-pane
+  (new horizontal-panel% (parent main-panel)
        (alignment '(right bottom))
        (stretchable-height #f)))
 
 (define about-button
-  (new button% (parent bottom-panel)
+  (new button% (parent bottom-pane)
        (label "About")
        (callback (thunk* (about)))))
 
 (define quit-button
-  (new button% (parent bottom-panel)
+  (new button% (parent bottom-pane)
        (label "Quit")
        (callback (thunk* (quit)))))
 
