@@ -3,7 +3,7 @@
 
 ;;;; Program info
 (define program-name "Skat bid calculator")
-(define program-version "v2.0")
+(define program-version "v2.1")
 
 (define version-message
   (format #<<version
@@ -250,7 +250,7 @@ version
     (update-score! "lost" -2))
   (values text score))
 
-(define (calculate-value)
+(define (calculate-value!)
   (define matadors (count-matadors))
   (define base-value (suit-value trump))
   (let loop
@@ -286,7 +286,7 @@ version
        ;; Continue iterating.
        (loop score (cdr boxes) text)))))
 
-(define (calculate-null-value)
+(define (calculate-null-value!)
   (define hand? (send hand-box get-value))
   (define ouvert? (send ouvert-box get-value))
   (define revolution? (send revolution-box get-value))
@@ -320,7 +320,7 @@ version
 (define card-y-size 100)
 (define card-spacing 40)
 
-(define (draw-cards canvas dc)
+(define (draw-cards! canvas dc)
   (send dc clear)
   ;; Number of cards in the hand is shown at the top left corner.
   (send dc set-text-foreground "Black")
@@ -389,7 +389,12 @@ version
   (new list-box% (parent game-pane)
        (label "")
        (choices '())
-       (vert-margin 0)))
+       (vert-margin 0)
+       (callback
+        (λ (list-box event)
+          (let ((selected? (and (send list-box get-selection) #t)))
+            (send player-selection-button enable selected?)
+            (send remove-round-button enable selected?))))))
 
 (define player-selection-button
   (new button% (parent player-selection-pane)
@@ -440,12 +445,15 @@ version
 (define remove-round-button
   (new button% (parent round-buttons-pane)
        (label "-")
+       (enabled #f)
        (callback
-        (thunk*
+        (λ (button event)
          (let ((selection (send game-list get-selection)))
            (when selection
+             (update-total!)
              (send game-list delete selection)
-             (update-total!)))))))
+             (send button enable #f)
+             (send player-selection-button enable #f)))))))
 
 ;; Contains all the main options.
 (define main-panel
@@ -457,7 +465,7 @@ version
 (define canvas
   (new canvas% (parent main-panel)
        (style '(no-focus))
-       (paint-callback draw-cards)
+       (paint-callback draw-cards!)
        (min-width 180) (min-height 80)))
 
 (define dc
@@ -476,7 +484,7 @@ version
        (alignment '(center center))
        (stretchable-height #f)))
 
-(define (update-spitze-menu)
+(define (update-spitze-menu!)
   (send spitze-menu clear)
   (cond
     ((= (length cards) 12)
@@ -485,7 +493,7 @@ version
     (else
      (send spitze-menu enable #f))))
 
-(define (update-value)
+(define (update-value!)
   (cond ((< (length cards) 12)
          (send* bid-message
            (enable #f)
@@ -497,8 +505,8 @@ version
            (enable #t)
            (set-label
             (if Null?
-                (calculate-null-value)
-                (calculate-value))))
+                (calculate-null-value!)
+                (calculate-value!))))
          (send player-selection-button enable #t))))
 
 (define trump-selection
@@ -514,9 +522,9 @@ version
             ;; Set the given trump.
             (set-trump! (list-ref '(Grand Acorns Leaves Hearts Bells)
                                   (send radiobox get-selection)))
-            (draw-cards canvas dc))
-          (update-spitze-menu)
-          (update-value)))))
+            (draw-cards! canvas dc))
+          (update-spitze-menu!)
+          (update-value!)))))
 
 ;;; Announcements before the game begins
 (define declaration-panel
@@ -543,8 +551,8 @@ version
           (send revolution-box enable Null?)
           ;; Sort the cards again.
           (set! cards (sort-cards cards))
-          (draw-cards canvas dc)
-          (update-value)))))
+          (draw-cards! canvas dc)
+          (update-value!)))))
 
 (define hand-box
   (new check-box% (parent declaration-panel)
@@ -560,7 +568,7 @@ version
                   (send schneider-box set-value #f)
                   (send schwarz-box set-value #f)
                   (send ouvert-box set-value #f))))
-          (update-value)))))
+          (update-value!)))))
 
 (define schneider-box
   (new check-box% (parent declaration-panel)
@@ -580,7 +588,7 @@ version
               (else
                (send schwarz-box set-value #f)
                (send ouvert-box set-value #f))))
-          (update-value)))))
+          (update-value!)))))
 
 (define schwarz-box
   (new check-box% (parent declaration-panel)
@@ -603,7 +611,7 @@ version
               ;; also gets automatically unticked.
               (else
                (send ouvert-box set-value #f))))
-          (update-value)))))
+          (update-value!)))))
 
 (define ouvert-box
   (new check-box% (parent declaration-panel)
@@ -622,7 +630,7 @@ version
                (send hand-box set-value #t))
               ((and Null? (not (send tickbox get-value)))
                (send revolution-box set-value #f))))
-          (update-value)))))
+          (update-value!)))))
 
 ;;; Additional declarations
 (define misc-panel
@@ -636,7 +644,7 @@ version
 (define bock-box
   (new check-box% (parent misc-panel)
        (label "Bock")
-       (callback (thunk* (update-value)))))
+       (callback (thunk* (update-value!)))))
 
 (define kontra-box
   (new check-box% (parent misc-panel)
@@ -647,7 +655,7 @@ version
                      (not (send tickbox get-value)))
             (send re-box set-value #f)
             (send supra-box set-value #f))
-          (update-value)))))
+          (update-value!)))))
 
 (define re-box
   (new check-box% (parent misc-panel)
@@ -658,7 +666,7 @@ version
             (if (send tickbox get-value)
                 (send kontra-box set-value #t)
                 (send supra-box set-value #f)))
-          (update-value)))))
+          (update-value!)))))
 
 (define supra-box
   (new check-box% (parent misc-panel)
@@ -670,14 +678,14 @@ version
             (send kontra-box set-value #t)
             (send re-box set-value #t)
             (send supra-box set-value #t))
-          (update-value)))))
+          (update-value!)))))
 
 (define spitze-menu
   (new choice% (parent misc-panel)
        (label "Spitze")
        (choices '())
        (enabled #f)
-       (callback (thunk* (update-value)))))
+       (callback (thunk* (update-value!)))))
 
 (define revolution-box
   (new check-box% (parent misc-panel)
@@ -690,7 +698,7 @@ version
             (send null-box set-value #t)
             (send ouvert-box set-value #t)
             (send hand-box set-value #t))
-          (update-value)))))
+          (update-value!)))))
 
 ;;; Situation at the end of the game
 (define endgame-panel
@@ -704,7 +712,7 @@ version
 (define lost-box
   (new check-box% (parent endgame-panel)
        (label "Lost")
-       (callback (thunk* (update-value)))))
+       (callback (thunk* (update-value!)))))
 
 (define schneider-result-box
   (new check-box% (parent endgame-panel)
@@ -719,7 +727,7 @@ version
             (send schwarz-box set-value #f)
             (send schneider-box set-value #f)
             (send ouvert-box set-value #f))
-          (update-value)))))
+          (update-value!)))))
 
 (define schwarz-result-box
   (new check-box% (parent endgame-panel)
@@ -736,7 +744,7 @@ version
                (send schwarz-result-box set-value #f)
                (send schwarz-box set-value #f)
                (send ouvert-box set-value #f))))
-          (update-value)))))
+          (update-value!)))))
 
 (define style-box
  (new radio-box% (parent top-pane)
@@ -748,7 +756,7 @@ version
        (λ (radiobox event)
          (when (eq? 'radio-box (send event get-event-type))
            (set! French? (zero? (send radiobox get-selection)))
-           (draw-cards canvas dc))))))
+           (draw-cards! canvas dc))))))
 
 (define reversed-box
   (new check-box% (parent top-pane)
@@ -758,18 +766,18 @@ version
           (when (eq? 'check-box (send event get-event-type))
             (reversed? (send tickbox get-value))
             (set! cards (sort-cards cards))
-            (draw-cards canvas dc))))))
+            (draw-cards! canvas dc))))))
 
 (define grand-menu
   (new choice% (parent top-pane)
        (label "Grand value")
        (choices '("24" "20"))
-       (callback (thunk* (update-value)))))
+       (callback (thunk* (update-value!)))))
 
 (define grand-ouvert-box
   (new check-box% (parent top-pane)
        (label "Grand ouvert value 36?")
-       (callback (thunk* (update-value)))))
+       (callback (thunk* (update-value!)))))
 
 ;;; Picking cards for the hand
 (define card-selection
@@ -795,16 +803,16 @@ version
                 ;; Toggled off
                 ((not (send tickbox get-value))
                  (remove-card! the-card)
-                 (draw-cards canvas dc))
+                 (draw-cards! canvas dc))
                 ;; Toggled on but there are too many cards
                 ((>= (length cards) 12)
                  (send tickbox set-value #f))
                 ;; Toggled on
                 (else
                  (add-card! the-card)
-                 (draw-cards canvas dc))))
-            (update-spitze-menu)
-            (update-value))))))
+                 (draw-cards! canvas dc))))
+            (update-spitze-menu!)
+            (update-value!))))))
 
 (define bottom-pane
   (new horizontal-panel% (parent main-panel)
